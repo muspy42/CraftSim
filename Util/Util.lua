@@ -331,7 +331,7 @@ function CraftSim.UTIL:GetDifferentQualitiesByCraftingReagentTbl(recipeID, craft
     return linksByQuality
 end
 
----@return fun(ID: CraftSim.LOCALIZATION_IDS): string
+---@return fun(ID: CraftSim.LOCALIZATION_IDS | string): string
 function CraftSim.UTIL:GetLocalizer()
     return function(ID)
         return CraftSim.LOCAL:GetText(ID)
@@ -346,6 +346,7 @@ end
 ---@param skillCurveValueEnd number
 ---@param lessConcentrationUsageFactors number[]
 ---@param noRounding boolean?
+---@return number concentrationCost
 function CraftSim.UTIL:CalculateConcentrationCost(costConstant, playerSkill, skillStart, skillEnd, skillCurveValueStart,
                                                   skillCurveValueEnd, lessConcentrationUsageFactors, noRounding)
     local skillDifference = math.abs(skillEnd - skillStart)

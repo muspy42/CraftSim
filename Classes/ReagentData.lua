@@ -212,6 +212,21 @@ function CraftSim.ReagentData:GetRequiredCraftingReagentInfoTbl()
     return craftingReagentInfoTbl
 end
 
+---@param itemID ItemID
+---@return number requiredQuantity
+function CraftSim.ReagentData:GetRequiredQuantityByItemID(itemID)
+    for _, reagent in pairs(self.requiredReagents) do
+        local reagentItem = GUTIL:Find(reagent.items, function(reagentItem)
+            return reagentItem.item:GetItemID() == itemID
+        end)
+        if reagentItem then
+            return reagent.requiredQuantity
+        end
+    end
+
+    return 0
+end
+
 ---@return CraftSim.OptionalReagent[] activeReagents
 function CraftSim.ReagentData:GetActiveOptionalReagents()
     local activeReagents = {}
@@ -293,7 +308,7 @@ end
 
 function CraftSim.ReagentData:GetMaxSkillFactor()
     local maxQualityReagentsCraftingTbl = GUTIL:Map(self.requiredReagents, function(rr)
-        return rr:GetCraftingReagentInfoByQuality(3, true)
+        return rr:GetCraftingReagentInfoByQuality(self.recipeData:IsSimplifiedQualityRecipe() and 2 or 3, true)
     end)
 
     -- explicitly do not use concentration flag here
@@ -426,6 +441,9 @@ function CraftSim.ReagentData:SetReagentsMaxByQuality(qualityID)
     if not qualityID or qualityID < 1 or qualityID > 3 then
         error("CraftSim.ReagentData:SetReagentsMaxByQuality(qualityID) -> qualityID has to be between 1 and 3")
     end
+    if self.recipeData:IsSimplifiedQualityRecipe() and qualityID == 3 then
+        error("Recipes added in Midnight do not have reagents with 3 quality tiers")
+    end
     for _, reagent in pairs(self.requiredReagents) do
         if reagent.hasQuality then
             reagent:Clear()
@@ -446,6 +464,30 @@ function CraftSim.ReagentData:SetReagentsByOptimizationResult(optimizationResult
 
     -- always set nonquality reagents to max
     self.recipeData:SetNonQualityReagentsMax()
+end
+
+
+---@return boolean requiredQuantityFulfilled
+function CraftSim.ReagentData:SetRequiredReagent(itemID, quantity)
+    ---@type CraftSim.Reagent
+    local requiredReagent
+    for _, reagent in pairs(self.requiredReagents) do
+        local reagentItem = GUTIL:Find(reagent.items, function(reagentItem)
+            return reagentItem.item:GetItemID() == itemID
+        end)
+        if reagentItem then
+            reagentItem.quantity = quantity
+            requiredReagent = reagent --[[@as CraftSim.Reagent]]
+            break
+        end
+    end
+
+    local totalQualityCount = 0
+    for _, reagentItem in pairs(requiredReagent.items) do
+        totalQualityCount = totalQualityCount + reagentItem.quantity
+    end
+
+    return totalQualityCount == requiredReagent.requiredQuantity
 end
 
 ---comment
@@ -478,11 +520,13 @@ function CraftSim.ReagentData:HasEnough(multiplier, crafterUID)
     -- update item cache for all possible optional reagents if I am the crafter
     if crafterUID == CraftSim.UTIL:GetPlayerCrafterUID() then
         for _, slot in pairs(GUTIL:Concat({ self.optionalReagentSlots, self.finishingReagentSlots })) do
-            ---@type CraftSim.OptionalReagentSlot
-            slot = slot
-            for _, possibleReagent in pairs(slot.possibleReagents) do
-                local itemID = possibleReagent.item:GetItemID()
-                CraftSim.ITEM_COUNT:UpdateAllCountsForItemID(itemID)
+            if not slot:IsCurrency() then
+                ---@type CraftSim.OptionalReagentSlot
+                slot = slot
+                for _, possibleReagent in pairs(slot.possibleReagents) do
+                    local itemID = possibleReagent.item:GetItemID()
+                    CraftSim.ITEM_COUNT:UpdateAllCountsForItemID(itemID)
+                end
             end
         end
         if self:HasRequiredSelectableReagent() and hasrequiredSelectableReagent then
